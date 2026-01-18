@@ -7,14 +7,13 @@ FROM node:20-alpine AS builder
 
   FROM nginx:alpine
   COPY --from=builder /app/dist /usr/share/nginx/html
-  COPY nginx.conf /etc/nginx/nginx.conf
-  EXPOSE 80
-  CMD ["nginx", "-g", "daemon off;"]
+  COPY nginx.conf /etc/nginx/nginx.conf.template
+  CMD sh -c "envsubst '\$PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
 
-  Now create nginx config:
-  nano nginx.conf
+  Then:
+  code ~/dev/ridersos/frontend/nginx.conf
 
-  Paste:
+  Paste and save:
   events {
       worker_connections 1024;
   }
@@ -24,7 +23,7 @@ FROM node:20-alpine AS builder
       default_type application/octet-stream;
 
       server {
-          listen 80;
+          listen $PORT;
           server_name _;
           root /usr/share/nginx/html;
           index index.html;
@@ -34,4 +33,3 @@ FROM node:20-alpine AS builder
           }
       }
   }
-
