@@ -1,37 +1,37 @@
-# Build stage
 FROM node:20-alpine AS builder
+  WORKDIR /app
+  COPY package*.json ./
+  RUN npm ci
+  COPY . .
+  RUN npm run build
 
-WORKDIR /app
+  FROM nginx:alpine
+  COPY --from=builder /app/dist /usr/share/nginx/html
+  COPY nginx.conf /etc/nginx/nginx.conf
+  EXPOSE 80
+  CMD ["nginx", "-g", "daemon off;"]
 
-# Copy package files
-COPY package*.json ./
+  Now create nginx config:
+  nano nginx.conf
 
-# Install dependencies
-RUN npm ci
+  Paste:
+  events {
+      worker_connections 1024;
+  }
 
-# Copy source code
-COPY . .
+  http {
+      include /etc/nginx/mime.types;
+      default_type application/octet-stream;
 
-# Build arguments for environment variables
-ARG VITE_API_URL=http://localhost:3001/api
+      server {
+          listen 80;
+          server_name _;
+          root /usr/share/nginx/html;
+          index index.html;
 
-# Build the app
-ENV VITE_API_URL=$VITE_API_URL
-RUN npm run build
+          location / {
+              try_files $uri $uri/ /index.html;
+          }
+      }
+  }
 
-# Production stage with nginx
-FROM nginx:alpine AS production
-
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy built assets from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Add health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
