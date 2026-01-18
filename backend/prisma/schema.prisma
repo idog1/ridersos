@@ -1,0 +1,423 @@
+// Prisma Schema for RidersOS.app
+// Database: PostgreSQL
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id                    String   @id @default(uuid())
+  email                 String   @unique
+  passwordHash          String?  // For email/password auth
+  firstName             String?  @map("first_name")
+  lastName              String?  @map("last_name")
+  fullName              String?  @map("full_name")
+  roles                 String[] @default([])
+  profileImage          String?  @map("profile_image")
+  birthday              DateTime?
+  parentEmail           String?  @map("parent_email")
+  dashboardCardOrder    String[] @default([]) @map("dashboard_card_order")
+  lockerNumber          String?  @map("locker_number")
+  
+  // OAuth fields
+  googleId              String?  @unique @map("google_id")
+  
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  horses                Horse[]
+  trainingSessions      TrainingSession[] @relation("TrainerSessions")
+  riderSessions         TrainingSession[] @relation("RiderSessions")
+  competitions          Competition[]
+  billingRates          BillingRate[]
+  notifications         Notification[]
+  notificationPrefs     NotificationPreference[]
+  managedStables        Stable[]
+  sentConnections       UserConnection[] @relation("SentConnections")
+  receivedConnections   UserConnection[] @relation("ReceivedConnections")
+  guardianOf            GuardianMinor[] @relation("GuardianRelation")
+  guardedBy             GuardianMinor[] @relation("MinorRelation")
+  contactMessages       ContactMessage[]
+  monthlySummariesAsTrainer MonthlyBillingSummary[] @relation("TrainerSummaries")
+  monthlySummariesAsRider   MonthlyBillingSummary[] @relation("RiderSummaries")
+
+  @@map("users")
+}
+
+model UserConnection {
+  id              String   @id @default(uuid())
+  fromUserEmail   String   @map("from_user_email")
+  toUserEmail     String   @map("to_user_email")
+  connectionType  String   @map("connection_type") // 'Trainer-Rider'
+  status          ConnectionStatus @default(PENDING)
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  fromUser        User     @relation("SentConnections", fields: [fromUserEmail], references: [email])
+  toUser          User     @relation("ReceivedConnections", fields: [toUserEmail], references: [email])
+
+  @@unique([fromUserEmail, toUserEmail, connectionType])
+  @@map("user_connections")
+}
+
+model GuardianMinor {
+  id            String   @id @default(uuid())
+  guardianEmail String   @map("guardian_email")
+  minorEmail    String   @map("minor_email")
+  status        GuardianStatus @default(ACTIVE)
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  guardian      User     @relation("GuardianRelation", fields: [guardianEmail], references: [email])
+  minor         User     @relation("MinorRelation", fields: [minorEmail], references: [email])
+
+  @@unique([guardianEmail, minorEmail])
+  @@map("guardian_minors")
+}
+
+// ============================================
+// HORSE MANAGEMENT
+// ============================================
+
+model Horse {
+  id              String   @id @default(uuid())
+  ownerEmail      String   @map("owner_email")
+  name            String
+  homeStableName  String?  @map("home_stable_name")
+  suiteNumber     String?  @map("suite_number")
+  breed           String?
+  birthYear       Int?     @map("birth_year")
+  color           String?
+  height          String?
+  chipNumber      String?  @map("chip_number")
+  description     String?
+  imageUrl        String?  @map("image_url")
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  owner           User     @relation(fields: [ownerEmail], references: [email])
+  events          HorseEvent[]
+
+  @@map("horses")
+}
+
+model HorseEvent {
+  id                    String   @id @default(uuid())
+  horseId               String   @map("horse_id")
+  eventType             HorseEventType @map("event_type")
+  eventDate             DateTime @map("event_date")
+  providerName          String?  @map("provider_name")
+  description           String?
+  cost                  Decimal? @db.Decimal(10, 2)
+  nextDueDate           DateTime? @map("next_due_date")
+  notes                 String?
+  status                EventStatus @default(SCHEDULED)
+  completedDate         DateTime? @map("completed_date")
+  isRecurring           Boolean  @default(false) @map("is_recurring")
+  recurrenceWeeks       Int?     @map("recurrence_weeks")
+  reminderWeeksBefore   Int?     @map("reminder_weeks_before")
+  reminderEmail         String?  @map("reminder_email")
+  
+  createdAt             DateTime @default(now()) @map("created_at")
+  
+  horse                 Horse    @relation(fields: [horseId], references: [id], onDelete: Cascade)
+
+  @@map("horse_events")
+}
+
+// ============================================
+// STABLE MANAGEMENT
+// ============================================
+
+model Stable {
+  id              String   @id @default(uuid())
+  name            String
+  managerEmail    String   @map("manager_email")
+  address         String?
+  city            String?
+  state           String?
+  country         String?
+  latitude        Decimal? @db.Decimal(10, 8)
+  longitude       Decimal? @db.Decimal(11, 8)
+  phone           String?
+  email           String?
+  description     String?
+  images          String[] @default([])
+  trainerEmails   String[] @default([]) @map("trainer_emails")
+  approvalStatus  ApprovalStatus @default(PENDING) @map("approval_status")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  manager         User     @relation(fields: [managerEmail], references: [email])
+  events          StableEvent[]
+
+  @@map("stables")
+}
+
+model StableEvent {
+  id              String   @id @default(uuid())
+  stableId        String   @map("stable_id")
+  title           String
+  eventType       StableEventType @map("event_type")
+  description     String?
+  eventDate       DateTime @map("event_date")
+  location        String?
+  latitude        Decimal? @db.Decimal(10, 8)
+  longitude       Decimal? @db.Decimal(11, 8)
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  
+  stable          Stable   @relation(fields: [stableId], references: [id], onDelete: Cascade)
+
+  @@map("stable_events")
+}
+
+// ============================================
+// TRAINING & SCHEDULING
+// ============================================
+
+model TrainingSession {
+  id                String   @id @default(uuid())
+  trainerEmail      String   @map("trainer_email")
+  riderEmail        String   @map("rider_email")
+  riderName         String?  @map("rider_name")
+  horseName         String?  @map("horse_name")
+  sessionDate       DateTime @map("session_date")
+  duration          Int      @default(60) // minutes
+  sessionType       SessionType @map("session_type")
+  notes             String?
+  isRecurring       Boolean  @default(false) @map("is_recurring")
+  recurrenceWeeks   Int?     @map("recurrence_weeks")
+  riderVerified     Boolean  @default(false) @map("rider_verified")
+  riderVerifiedDate DateTime? @map("rider_verified_date")
+  status            SessionStatus @default(SCHEDULED)
+  
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  trainer           User     @relation("TrainerSessions", fields: [trainerEmail], references: [email])
+  rider             User     @relation("RiderSessions", fields: [riderEmail], references: [email])
+
+  @@map("training_sessions")
+}
+
+model Competition {
+  id              String   @id @default(uuid())
+  trainerEmail    String   @map("trainer_email")
+  name            String
+  competitionDate DateTime @map("competition_date")
+  location        String
+  riders          Json     @default("[]") // CompetitionRider[]
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  trainer         User     @relation(fields: [trainerEmail], references: [email])
+
+  @@map("competitions")
+}
+
+// ============================================
+// BILLING
+// ============================================
+
+model BillingRate {
+  id            String   @id @default(uuid())
+  trainerEmail  String   @map("trainer_email")
+  sessionType   String   @map("session_type")
+  currency      Currency @default(ILS)
+  rate          Decimal  @db.Decimal(10, 2)
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  trainer       User     @relation(fields: [trainerEmail], references: [email])
+
+  @@unique([trainerEmail, sessionType])
+  @@map("billing_rates")
+}
+
+model MonthlyBillingSummary {
+  id                  String   @id @default(uuid())
+  trainerEmail        String   @map("trainer_email")
+  riderEmail          String   @map("rider_email")
+  month               String   // 'YYYY-MM' format
+  sessionsRevenue     Decimal  @db.Decimal(10, 2) @map("sessions_revenue")
+  competitionsRevenue Decimal  @db.Decimal(10, 2) @map("competitions_revenue")
+  totalRevenue        Decimal  @db.Decimal(10, 2) @map("total_revenue")
+  currency            Currency @default(ILS)
+  sessionCount        Int      @map("session_count")
+  paymentRequested    Boolean  @default(false) @map("payment_requested")
+  paymentStatus       PaymentStatus @default(PENDING) @map("payment_status")
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  
+  trainer             User     @relation("TrainerSummaries", fields: [trainerEmail], references: [email])
+  rider               User     @relation("RiderSummaries", fields: [riderEmail], references: [email])
+
+  @@unique([trainerEmail, riderEmail, month])
+  @@map("monthly_billing_summaries")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id                  String   @id @default(uuid())
+  userEmail           String   @map("user_email")
+  type                NotificationType
+  title               String
+  message             String
+  relatedEntityType   String?  @map("related_entity_type")
+  relatedEntityId     String?  @map("related_entity_id")
+  link                String?
+  read                Boolean  @default(false)
+
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  user                User     @relation(fields: [userEmail], references: [email])
+
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                String   @id @default(uuid())
+  userEmail         String   @map("user_email")
+  notificationType  String   @map("notification_type")
+  emailEnabled      Boolean  @default(true) @map("email_enabled")
+  inAppEnabled      Boolean  @default(true) @map("in_app_enabled")
+  
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  user              User     @relation(fields: [userEmail], references: [email])
+
+  @@unique([userEmail, notificationType])
+  @@map("notification_preferences")
+}
+
+// ============================================
+// CONTACT & SUPPORT
+// ============================================
+
+model ContactMessage {
+  id          String   @id @default(uuid())
+  senderEmail String?  @map("sender_email")
+  senderName  String?  @map("sender_name")
+  type        MessageType
+  subject     String
+  message     String
+  status      MessageStatus @default(NEW)
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  sender      User?    @relation(fields: [senderEmail], references: [email])
+
+  @@map("contact_messages")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum ConnectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum GuardianStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum HorseEventType {
+  FARRIER
+  VACCINATION
+  VETERINARIAN
+  OTHER
+}
+
+enum EventStatus {
+  SCHEDULED
+  COMPLETED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum StableEventType {
+  COMPETITION
+  TRAINING
+  CLINIC
+  SHOW
+  OTHER
+}
+
+enum SessionType {
+  LESSON
+  TRAINING
+  HORSE_TRAINING
+  HORSE_TRANSPORT
+  COMPETITION_PREP
+  EVALUATION
+  OTHER
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum Currency {
+  USD
+  EUR
+  GBP
+  CAD
+  AUD
+  ILS
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUESTED
+  PAID
+}
+
+enum NotificationType {
+  SESSION_SCHEDULED
+  SESSION_CANCELLED
+  PAYMENT_REQUEST
+  CONNECTION_REQUEST
+  HORSE_CARE_REMINDER
+}
+
+enum MessageType {
+  GENERAL
+  BUG_REPORT
+  FEATURE_SUGGESTION
+}
+
+enum MessageStatus {
+  NEW
+  READ
+  RESOLVED
+}

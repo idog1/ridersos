@@ -1,0 +1,32 @@
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ridersos
+
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ridersos-config
+  namespace: ridersos
+data:
+  NODE_ENV: "production"
+  PORT: "3001"
+  JWT_EXPIRES_IN: "7d"
+  UPLOAD_DIR: "/app/uploads"
+
+---
+# Secret for sensitive data
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ridersos-secrets
+  namespace: ridersos
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://ridersos:CHANGE_ME@ridersos-postgres:5432/ridersos_db?schema=public"
+  JWT_SECRET: "CHANGE_THIS_IN_PRODUCTION_TO_A_LONG_RANDOM_STRING"
+  POSTGRES_PASSWORD: "CHANGE_ME"

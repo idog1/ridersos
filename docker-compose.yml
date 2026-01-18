@@ -1,0 +1,70 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: ridersos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ridersos
+      POSTGRES_PASSWORD: ridersos_password
+      POSTGRES_DB: ridersos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ridersos -d ridersos_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ridersos-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://ridersos:ridersos_password@postgres:5432/ridersos_db?schema=public
+      - JWT_SECRET=dKONOCYUn39l+v6TT/amJ1SAtzl4wSZsf9Ob9NJY/lMyxRjjK7Y1Dnf4/bG12f/U
+      - JWT_EXPIRES_IN=7d
+      - PORT=3001
+      - FRONTEND_URL=http://localhost:5173
+      - UPLOAD_DIR=/app/uploads
+      - API_BASE_URL=http://localhost:3001
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=ridersosapp@gmail.com
+      - SMTP_PASS=lyozatceclzxepro
+      - SMTP_FROM=ridersosapp@gmail.com
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Frontend (Vite dev server)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      args:
+        - VITE_API_URL=http://localhost:3001/api
+        - VITE_GOOGLE_CLIENT_ID=61014276323-35c9sn9ig66emg350l32idtnf5vtlo2s.apps.googleusercontent.com
+    container_name: ridersos-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3001/api
+      - VITE_GOOGLE_CLIENT_ID=61014276323-35c9sn9ig66emg350l32idtnf5vtlo2s.apps.googleusercontent.com
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  uploads_data:

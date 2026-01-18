@@ -1,0 +1,123 @@
+---
+# PersistentVolumeClaim for uploads
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-pvc
+  namespace: ridersos
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ridersos-backend
+  namespace: ridersos
+  labels:
+    app: ridersos-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ridersos-backend
+  template:
+    metadata:
+      labels:
+        app: ridersos-backend
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z ridersos-postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      containers:
+        - name: backend
+          image: your-registry/ridersos-backend:latest  # Change to your registry
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: ridersos-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ridersos-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ridersos-secrets
+                  key: JWT_SECRET
+            - name: FRONTEND_URL
+              value: "https://your-domain.com"  # Change to your domain
+            - name: API_BASE_URL
+              value: "https://api.your-domain.com"  # Change to your API domain
+          volumeMounts:
+            - name: uploads-storage
+              mountPath: /app/uploads
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: uploads-storage
+          persistentVolumeClaim:
+            claimName: uploads-pvc
+
+---
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ridersos-backend
+  namespace: ridersos
+spec:
+  selector:
+    app: ridersos-backend
+  ports:
+    - port: 3001
+      targetPort: 3001
+  type: ClusterIP
+
+---
+# Backend HorizontalPodAutoscaler (optional)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ridersos-backend-hpa
+  namespace: ridersos
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ridersos-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

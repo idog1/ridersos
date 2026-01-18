@@ -1,0 +1,101 @@
+---
+# PersistentVolumeClaim for PostgreSQL
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: ridersos
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # Uncomment and modify for specific storage class
+  # storageClassName: standard
+
+---
+# PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ridersos-postgres
+  namespace: ridersos
+  labels:
+    app: ridersos-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ridersos-postgres
+  template:
+    metadata:
+      labels:
+        app: ridersos-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "ridersos"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ridersos-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: "ridersos_db"
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - ridersos
+                - -d
+                - ridersos_db
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - ridersos
+                - -d
+                - ridersos_db
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ridersos-postgres
+  namespace: ridersos
+spec:
+  selector:
+    app: ridersos-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
