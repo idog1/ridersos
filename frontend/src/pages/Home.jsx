@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -294,9 +295,9 @@ export default function Home() {
             {t.footer.copyright}
           </span>
           <div className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm text-[#1B4332]/60">
-            <a href="#" className="hover:text-[#1B4332] transition-colors">{t.footer.privacy}</a>
-            <a href="#" className="hover:text-[#1B4332] transition-colors">{t.footer.terms}</a>
-            <a href="#" className="hover:text-[#1B4332] transition-colors">{t.footer.contact}</a>
+            <Link to="/PrivacyPolicy" className="hover:text-[#1B4332] transition-colors">{t.footer.privacy}</Link>
+            <Link to="/PrivacyPolicy" className="hover:text-[#1B4332] transition-colors">{t.footer.terms}</Link>
+            <Link to="/ContactUs" className="hover:text-[#1B4332] transition-colors">{t.footer.contact}</Link>
           </div>
         </div>
       </footer>

@@ -70,7 +70,7 @@ const AuthenticatedApp = () => {
       } />
       
       {/* Public pages that don't require auth */}
-      {['Home', 'Stables', 'StableDetails', 'ContactUs'].map((path) => {
+      {['Home', 'Stables', 'StableDetails', 'ContactUs', 'PrivacyPolicy'].map((path) => {
         const Page = Pages[path];
         if (!Page) return null;
         return (
@@ -89,7 +89,7 @@ const AuthenticatedApp = () => {
       {/* Protected pages */}
       {Object.entries(Pages).map(([path, Page]) => {
         // Skip public pages already defined
-        if (['Home', 'Stables', 'StableDetails', 'ContactUs'].includes(path)) {
+        if (['Home', 'Stables', 'StableDetails', 'ContactUs', 'PrivacyPolicy'].includes(path)) {
           return null;
         }
         return (

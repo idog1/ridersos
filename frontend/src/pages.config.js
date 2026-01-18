@@ -15,6 +15,7 @@ import Schedule from './pages/Schedule';
 import StableDetails from './pages/StableDetails';
 import Stables from './pages/Stables';
 import UserManagement from './pages/UserManagement';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import __Layout from './Layout.jsx';
 
 
@@ -36,6 +37,7 @@ export const PAGES = {
     "StableDetails": StableDetails,
     "Stables": Stables,
     "UserManagement": UserManagement,
+    "PrivacyPolicy": PrivacyPolicy,
 }
 
 export const pagesConfig = {
