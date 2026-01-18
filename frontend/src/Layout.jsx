@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Menu } from 'lucide-react';
 
 // Pages that should NOT show the sidebar
-const PUBLIC_PAGES = ['Home', 'Login', 'Stables', 'StableDetails', 'ContactUs'];
+const PUBLIC_PAGES = ['Home', 'Login', 'Stables', 'StableDetails', 'ContactUs', 'PrivacyPolicy'];
 
 export default function Layout({ children, currentPageName }) {
   const { isAuthenticated } = useAuth();
