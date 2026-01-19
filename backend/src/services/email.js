@@ -273,4 +273,105 @@ export const emailTemplates = {
       </div>
     `,
   }),
+
+  welcomeUser: (userName) => ({
+    subject: `Welcome to RidersOS - Your Equestrian Journey Starts Here!`,
+    text: `Hi ${userName},\n\nWelcome to RidersOS! We're excited to have you join our equestrian community.\n\nHere's what you can do on RidersOS:\n\n• Track Your Horses - Register your horses and keep track of their health records, farrier visits, and vaccinations\n• Schedule Training - View and manage your training sessions with your trainer\n• Connect with Trainers - Find and connect with trainers in your area\n• Manage Billing - Keep track of your training expenses and payment history\n• Discover Stables - Explore registered stables in your area\n\nGet started by completing your profile and adding your first horse!\n\nBest regards,\nThe RidersOS Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1B4332; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">RidersOS</h1>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <h2 style="color: #1B4332;">Welcome to RidersOS! 🐴</h2>
+          <p>Hi ${userName},</p>
+          <p>We're excited to have you join our equestrian community!</p>
+
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="font-weight: bold; color: #1B4332; margin-top: 0;">Here's what you can do on RidersOS:</p>
+            <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+              <li><strong>Track Your Horses</strong> - Register your horses and keep track of their health records, farrier visits, and vaccinations</li>
+              <li><strong>Schedule Training</strong> - View and manage your training sessions with your trainer</li>
+              <li><strong>Connect with Trainers</strong> - Find and connect with trainers in your area</li>
+              <li><strong>Manage Billing</strong> - Keep track of your training expenses and payment history</li>
+              <li><strong>Discover Stables</strong> - Explore registered stables in your area</li>
+            </ul>
+          </div>
+
+          <p>Get started by completing your profile and adding your first horse!</p>
+          <a href="${process.env.FRONTEND_URL}/Dashboard" style="display: inline-block; background: #1B4332; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 15px;">Go to Dashboard</a>
+        </div>
+        <div style="padding: 15px; text-align: center; color: #666; font-size: 12px;">
+          <p>Best regards,<br>The RidersOS Team</p>
+        </div>
+      </div>
+    `,
+  }),
+
+  welcomeTrainer: (trainerName) => ({
+    subject: `Welcome Trainer! Your RidersOS Trainer Account is Ready`,
+    text: `Hi ${trainerName},\n\nCongratulations! You now have trainer privileges on RidersOS.\n\nAs a trainer, you can:\n\n• Manage Your Riders - Invite and connect with your riders\n• Schedule Sessions - Create and manage training sessions\n• Track Billing - Set your rates and track revenue from each rider\n• View Rider Progress - Monitor your riders' training history\n• Join Stables - Get listed as a trainer at registered stables\n\nStart by inviting your riders to connect with you!\n\nBest regards,\nThe RidersOS Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1B4332; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">RidersOS</h1>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <h2 style="color: #1B4332;">Welcome, Trainer! 🏇</h2>
+          <p>Hi ${trainerName},</p>
+          <p>Congratulations! You now have <strong>trainer privileges</strong> on RidersOS.</p>
+
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="font-weight: bold; color: #1B4332; margin-top: 0;">As a trainer, you can:</p>
+            <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+              <li><strong>Manage Your Riders</strong> - Invite and connect with your riders</li>
+              <li><strong>Schedule Sessions</strong> - Create and manage training sessions</li>
+              <li><strong>Track Billing</strong> - Set your rates and track revenue from each rider</li>
+              <li><strong>View Rider Progress</strong> - Monitor your riders' training history</li>
+              <li><strong>Join Stables</strong> - Get listed as a trainer at registered stables</li>
+            </ul>
+          </div>
+
+          <p>Start by inviting your riders to connect with you!</p>
+          <a href="${process.env.FRONTEND_URL}/MyRiders" style="display: inline-block; background: #1B4332; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 15px;">Manage My Riders</a>
+        </div>
+        <div style="padding: 15px; text-align: center; color: #666; font-size: 12px;">
+          <p>Best regards,<br>The RidersOS Team</p>
+        </div>
+      </div>
+    `,
+  }),
+
+  welcomeGuardian: (guardianName) => ({
+    subject: `Welcome Parent! Your RidersOS Parent Account is Ready`,
+    text: `Hi ${guardianName},\n\nYou now have parent privileges on RidersOS.\n\nAs a parent, you can:\n\n• Monitor Your Riders - View training schedules and activities for riders under your care\n• Track Payments - See billing summaries and payment requests from trainers\n• Receive Notifications - Get updates about training sessions and important events\n• Manage Multiple Riders - Oversee multiple young riders from one account\n\nVisit your Parent Dashboard to see your riders' activities!\n\nBest regards,\nThe RidersOS Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1B4332; padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">RidersOS</h1>
+        </div>
+        <div style="padding: 30px; background: #f9f9f9;">
+          <h2 style="color: #1B4332;">Welcome, Parent!</h2>
+          <p>Hi ${guardianName},</p>
+          <p>You now have <strong>parent privileges</strong> on RidersOS.</p>
+
+          <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="font-weight: bold; color: #1B4332; margin-top: 0;">As a parent, you can:</p>
+            <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+              <li><strong>Monitor Your Riders</strong> - View training schedules and activities for riders under your care</li>
+              <li><strong>Track Payments</strong> - See billing summaries and payment requests from trainers</li>
+              <li><strong>Receive Notifications</strong> - Get updates about training sessions and important events</li>
+              <li><strong>Manage Multiple Riders</strong> - Oversee multiple young riders from one account</li>
+            </ul>
+          </div>
+
+          <p>Visit your Parent Dashboard to see your riders' activities!</p>
+          <a href="${process.env.FRONTEND_URL}/Guardian" style="display: inline-block; background: #1B4332; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 15px;">Go to Parent Dashboard</a>
+        </div>
+        <div style="padding: 15px; text-align: center; color: #666; font-size: 12px;">
+          <p>Best regards,<br>The RidersOS Team</p>
+        </div>
+      </div>
+    `,
+  }),
 };

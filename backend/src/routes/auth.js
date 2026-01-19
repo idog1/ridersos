@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { sendEmail, emailTemplates } from '../services/email.js';
 
 // Validation schemas
 const registerSchema = z.object({
@@ -51,13 +52,23 @@ export default async function authRoutes(fastify, options) {
         passwordHash,
         firstName: data.firstName,
         lastName: data.lastName,
-        fullName: data.firstName && data.lastName 
-          ? `${data.firstName} ${data.lastName}` 
+        fullName: data.firstName && data.lastName
+          ? `${data.firstName} ${data.lastName}`
           : null,
         roles: ['Rider'] // Default role
       }
     });
-    
+
+    // Send welcome email (non-blocking)
+    const userName = user.firstName || user.email.split('@')[0];
+    const welcomeEmail = emailTemplates.welcomeUser(userName);
+    sendEmail({
+      to: user.email,
+      subject: welcomeEmail.subject,
+      text: welcomeEmail.text,
+      html: welcomeEmail.html
+    }).catch(err => console.error('Failed to send welcome email:', err));
+
     // Generate token
     const token = fastify.jwt.sign({ 
       id: user.id, 
@@ -124,6 +135,16 @@ export default async function authRoutes(fastify, options) {
           roles: ['Rider']
         }
       });
+
+      // Send welcome email to new user (non-blocking)
+      const userName = user.firstName || user.email.split('@')[0];
+      const welcomeEmail = emailTemplates.welcomeUser(userName);
+      sendEmail({
+        to: user.email,
+        subject: welcomeEmail.subject,
+        text: welcomeEmail.text,
+        html: welcomeEmail.html
+      }).catch(err => console.error('Failed to send welcome email:', err));
     } else if (!user.googleId) {
       // Link Google account to existing user
       user = await prisma.user.update({
@@ -166,10 +187,21 @@ export default async function authRoutes(fastify, options) {
     preHandler: [fastify.authenticate]
   }, async (request, reply) => {
     const data = updateMeSchema.parse(request.body);
-    
+
+    // Get current user to check for role changes
+    const currentUser = await prisma.user.findUnique({
+      where: { email: request.user.email }
+    });
+
+    if (!currentUser) {
+      return reply.code(404).send({ error: 'User not found' });
+    }
+
+    const oldRoles = currentUser.roles || [];
+
     // Build update data
     const updateData = {};
-    
+
     if (data.firstName !== undefined) updateData.firstName = data.firstName;
     if (data.lastName !== undefined) updateData.lastName = data.lastName;
     if (data.roles !== undefined) updateData.roles = data.roles;
@@ -178,24 +210,49 @@ export default async function authRoutes(fastify, options) {
     if (data.parentEmail !== undefined) updateData.parentEmail = data.parentEmail;
     if (data.dashboardCardOrder !== undefined) updateData.dashboardCardOrder = data.dashboardCardOrder;
     if (data.lockerNumber !== undefined) updateData.lockerNumber = data.lockerNumber;
-    
+
     // Update fullName if firstName or lastName changed
     if (data.firstName !== undefined || data.lastName !== undefined) {
-      const currentUser = await prisma.user.findUnique({
-        where: { email: request.user.email }
-      });
       const firstName = data.firstName ?? currentUser.firstName;
       const lastName = data.lastName ?? currentUser.lastName;
       if (firstName && lastName) {
         updateData.fullName = `${firstName} ${lastName}`;
       }
     }
-    
+
     const user = await prisma.user.update({
       where: { email: request.user.email },
       data: updateData
     });
-    
+
+    // Check for newly assigned roles and send welcome emails
+    if (data.roles !== undefined) {
+      const newRoles = data.roles || [];
+      const userName = user.firstName || user.email.split('@')[0];
+
+      // Check if Trainer role was newly assigned
+      if (newRoles.includes('Trainer') && !oldRoles.includes('Trainer')) {
+        const trainerEmail = emailTemplates.welcomeTrainer(userName);
+        sendEmail({
+          to: user.email,
+          subject: trainerEmail.subject,
+          text: trainerEmail.text,
+          html: trainerEmail.html
+        }).catch(err => console.error('Failed to send trainer welcome email:', err));
+      }
+
+      // Check if Parent/Guardian role was newly assigned
+      if (newRoles.includes('Parent/Guardian') && !oldRoles.includes('Parent/Guardian')) {
+        const guardianEmail = emailTemplates.welcomeGuardian(userName);
+        sendEmail({
+          to: user.email,
+          subject: guardianEmail.subject,
+          text: guardianEmail.text,
+          html: guardianEmail.html
+        }).catch(err => console.error('Failed to send guardian welcome email:', err));
+      }
+    }
+
     return sanitizeUser(user);
   });
 
