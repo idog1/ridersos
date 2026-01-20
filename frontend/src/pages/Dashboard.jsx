@@ -26,6 +26,7 @@ import {
 import NotificationBell from '../components/NotificationBell';
 import LanguageSelector from '../components/LanguageSelector';
 import Logo from '../components/Logo';
+import InstallAppButton from '../components/InstallAppButton';
 import { useTranslation } from '../components/translations';
 import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
@@ -350,6 +351,7 @@ export default function Dashboard() {
           <Logo />
           
           <div className="flex items-center gap-4">
+            <InstallAppButton />
             <LanguageSelector />
             <NotificationBell user={user} />
             <Link 

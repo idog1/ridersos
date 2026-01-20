@@ -16,7 +16,20 @@ export const translations = {
       billing: "חיוב",
       profile: "פרופיל",
       riderProfile: "פרופיל רוכב",
-      notifications: "התראות"
+      notifications: "התראות",
+      install: "התקן"
+    },
+    // Install App
+    install: {
+      title: "התקן את RidersOS",
+      description: "הוסף את RidersOS למסך הבית לגישה מהירה",
+      step1Title: "לחץ על כפתור השיתוף",
+      step1Desc: "חפש את אייקון השיתוף בתחתית Safari",
+      step2Title: "גלול ולחץ על \"הוסף למסך הבית\"",
+      step2Desc: "ייתכן שתצטרך לגלול למטה בתפריט השיתוף",
+      step3Title: "לחץ על \"הוסף\"",
+      step3Desc: "RidersOS יופיע במסך הבית שלך",
+      gotIt: "הבנתי"
     },
     // Beta Notice
     beta: {
@@ -619,7 +632,20 @@ export const translations = {
       billing: "Billing",
       profile: "Profile",
       riderProfile: "Rider Profile",
-      notifications: "Notifications"
+      notifications: "Notifications",
+      install: "Install"
+    },
+    // Install App
+    install: {
+      title: "Install RidersOS",
+      description: "Add RidersOS to your home screen for quick access",
+      step1Title: "Tap the Share button",
+      step1Desc: "Look for the share icon at the bottom of Safari",
+      step2Title: "Scroll and tap \"Add to Home Screen\"",
+      step2Desc: "You may need to scroll down in the share menu",
+      step3Title: "Tap \"Add\"",
+      step3Desc: "RidersOS will appear on your home screen",
+      gotIt: "Got it"
     },
     // Beta Notice
     beta: {

@@ -22,6 +22,7 @@ model User {
   firstName             String?  @map("first_name")
   lastName              String?  @map("last_name")
   fullName              String?  @map("full_name")
+  role                  String   @default("user") // 'user' or 'admin'
   roles                 String[] @default([])
   profileImage          String?  @map("profile_image")
   birthday              DateTime?
