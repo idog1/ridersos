@@ -9,7 +9,8 @@ const createSessionSchema = z.object({
   session_type: z.enum(['Lesson', 'Training', 'Horse Training', 'Horse Transport', 'Competition Prep', 'Evaluation', 'Other']),
   notes: z.string().optional(),
   is_recurring: z.boolean().default(false),
-  recurrence_weeks: z.number().int().optional()
+  recurrence_weeks: z.number().int().optional(),
+  group_id: z.string().optional()
 });
 
 const sessionTypeMap = {
@@ -33,11 +34,12 @@ export default async function sessionRoutes(fastify, options) {
   fastify.get('/', {
     preHandler: [fastify.authenticate]
   }, async (request, reply) => {
-    const { trainer_email, rider_email } = request.query;
-    
+    const { trainer_email, rider_email, group_id } = request.query;
+
     const where = {};
     if (trainer_email) where.trainerEmail = trainer_email;
     if (rider_email) where.riderEmail = rider_email;
+    if (group_id) where.groupId = group_id;
     
     const sessions = await prisma.trainingSession.findMany({
       where,
@@ -79,7 +81,8 @@ export default async function sessionRoutes(fastify, options) {
         sessionType: sessionTypeMap[data.session_type],
         notes: data.notes,
         isRecurring: data.is_recurring,
-        recurrenceWeeks: data.recurrence_weeks
+        recurrenceWeeks: data.recurrence_weeks,
+        groupId: data.group_id
       }
     });
     
@@ -258,6 +261,101 @@ export default async function sessionRoutes(fastify, options) {
     return { success: true };
   });
 
+  // Update all sessions in a group
+  fastify.patch('/group/:groupId', {
+    preHandler: [fastify.authenticate]
+  }, async (request, reply) => {
+    const { groupId } = request.params;
+
+    const sessions = await prisma.trainingSession.findMany({
+      where: { groupId }
+    });
+
+    if (sessions.length === 0) {
+      return reply.code(404).send({ error: 'Group not found' });
+    }
+
+    if (sessions[0].trainerEmail !== request.user.email) {
+      return reply.code(403).send({ error: 'Not authorized' });
+    }
+
+    const data = createSessionSchema.partial().parse(request.body);
+    const updateData = {};
+    if (data.session_date) updateData.sessionDate = new Date(data.session_date);
+    if (data.duration) updateData.duration = data.duration;
+    if (data.session_type) updateData.sessionType = sessionTypeMap[data.session_type];
+    if (data.notes !== undefined) updateData.notes = data.notes;
+
+    const updated = await prisma.trainingSession.updateMany({
+      where: { groupId },
+      data: updateData
+    });
+
+    const updatedSessions = await prisma.trainingSession.findMany({
+      where: { groupId },
+      orderBy: { riderEmail: 'asc' }
+    });
+
+    return updatedSessions.map(mapSessionToFrontend);
+  });
+
+  // Delete all sessions in a group
+  fastify.delete('/group/:groupId', {
+    preHandler: [fastify.authenticate]
+  }, async (request, reply) => {
+    const { groupId } = request.params;
+
+    const sessions = await prisma.trainingSession.findMany({
+      where: { groupId }
+    });
+
+    if (sessions.length === 0) {
+      return reply.code(404).send({ error: 'Group not found' });
+    }
+
+    if (sessions[0].trainerEmail !== request.user.email) {
+      return reply.code(403).send({ error: 'Not authorized' });
+    }
+
+    // Send cancellation notifications and emails for each rider
+    for (const session of sessions) {
+      await prisma.notification.create({
+        data: {
+          userEmail: session.riderEmail,
+          type: 'SESSION_CANCELLED',
+          title: 'Training Session Cancelled',
+          message: `Your ${reverseSessionTypeMap[session.sessionType]} session on ${session.sessionDate.toLocaleString()} has been cancelled.`,
+          relatedEntityType: 'TrainingSession',
+          relatedEntityId: session.id
+        }
+      });
+
+      try {
+        const trainer = await prisma.user.findUnique({ where: { email: request.user.email } });
+        const rider = await prisma.user.findUnique({ where: { email: session.riderEmail } });
+        const trainerName = trainer?.firstName || trainer?.fullName || 'Your trainer';
+        const riderName = rider?.firstName || rider?.fullName || 'Rider';
+        const sessionDate = new Date(session.sessionDate).toLocaleString('en-US', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        });
+
+        const emailContent = fastify.emailTemplates.sessionCancelled(riderName, trainerName, sessionDate);
+        await fastify.sendEmail({
+          to: session.riderEmail,
+          ...emailContent
+        });
+      } catch (emailError) {
+        fastify.log.error('Failed to send group cancellation email:', emailError);
+      }
+    }
+
+    await prisma.trainingSession.deleteMany({
+      where: { groupId }
+    });
+
+    return { success: true, deletedCount: sessions.length };
+  });
+
   // Verify session (rider endpoint)
   fastify.post('/:id/verify', {
     preHandler: [fastify.authenticate]
@@ -303,6 +401,7 @@ function mapSessionToFrontend(session) {
     rider_verified: session.riderVerified,
     rider_verified_date: session.riderVerifiedDate,
     status: session.status?.toLowerCase(),
+    group_id: session.groupId,
     created_date: session.createdAt,
     updated_date: session.updatedAt
   };

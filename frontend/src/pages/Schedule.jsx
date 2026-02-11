@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { motion } from 'framer-motion';
-import { Calendar as CalendarIcon, Clock, User, Plus, X, ChevronLeft, ChevronRight, Home, Trophy, Edit2, Download, Share2, Upload } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Users, Plus, X, ChevronLeft, ChevronRight, Home, Trophy, Edit2, Download, Share2, Upload } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import LanguageSelector from '../components/LanguageSelector';
 import { useTranslation } from '../components/translations';
@@ -36,6 +36,8 @@ export default function Schedule() {
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
 
+  const [selectedRiders, setSelectedRiders] = useState([]); // [{email, name, horse_name}]
+  const [allRiderHorses, setAllRiderHorses] = useState({}); // {email: [horses]}
   const [sessionForm, setSessionForm] = useState({
     rider_email: '',
     rider_name: '',
@@ -125,24 +127,13 @@ export default function Schedule() {
       queryClient.invalidateQueries({ queryKey: ['training-sessions'] });
       setShowAddSession(false);
       setEditingSession(null);
-      setSessionForm({
-        rider_email: '',
-        rider_name: '',
-        horse_name: '',
-        session_date: '',
-        duration: 60,
-        session_type: 'Lesson',
-        notes: '',
-        is_recurring: false,
-        recurrence_weeks: 4
-      });
+      resetForm();
     }
   });
 
   const updateSessionMutation = useMutation({
     mutationFn: async ({ id, data, originalSession }) => {
       await base44.entities.TrainingSession.update(id, data);
-      // Create notification for rider about session update
       await base44.entities.Notification.create({
         user_email: data.rider_email,
         type: 'session_scheduled',
@@ -157,17 +148,7 @@ export default function Schedule() {
       queryClient.invalidateQueries({ queryKey: ['training-sessions'] });
       setShowAddSession(false);
       setEditingSession(null);
-      setSessionForm({
-        rider_email: '',
-        rider_name: '',
-        horse_name: '',
-        session_date: '',
-        duration: 60,
-        session_type: 'Lesson',
-        notes: '',
-        is_recurring: false,
-        recurrence_weeks: 4
-      });
+      resetForm();
     }
   });
 
@@ -197,14 +178,50 @@ export default function Schedule() {
     }
   });
 
+  const resetForm = () => {
+    setSessionForm({
+      rider_email: '',
+      rider_name: '',
+      horse_name: '',
+      session_date: '',
+      duration: 60,
+      session_type: 'Lesson',
+      notes: '',
+      is_recurring: false,
+      recurrence_weeks: 4
+    });
+    setSelectedRiders([]);
+    setAllRiderHorses({});
+  };
+
+  const addRiderToGroup = async (riderEmail) => {
+    if (!riderEmail || selectedRiders.some(r => r.email === riderEmail)) return;
+    const rider = riders.find(r => r.email === riderEmail);
+    const horses = await base44.entities.Horse.filter({ owner_email: riderEmail });
+    setAllRiderHorses(prev => ({ ...prev, [riderEmail]: horses }));
+    setSelectedRiders(prev => [...prev, { email: riderEmail, name: rider?.name || riderEmail, horse_name: '' }]);
+  };
+
+  const removeRiderFromGroup = (riderEmail) => {
+    setSelectedRiders(prev => prev.filter(r => r.email !== riderEmail));
+  };
+
+  const updateRiderHorse = (riderEmail, horseName) => {
+    setSelectedRiders(prev => prev.map(r =>
+      r.email === riderEmail ? { ...r, horse_name: horseName } : r
+    ));
+  };
+
   const handleAddSession = () => {
-    if (!sessionForm.rider_email || !sessionForm.session_date) {
-      alert('Please select a rider and date/time');
+    const ridersToSchedule = selectedRiders.length > 0 ? selectedRiders :
+      (sessionForm.rider_email ? [{ email: sessionForm.rider_email, name: sessionForm.rider_name, horse_name: sessionForm.horse_name }] : []);
+
+    if (ridersToSchedule.length === 0 || !sessionForm.session_date) {
+      alert('Please select at least one rider and date/time');
       return;
     }
 
     if (editingSession) {
-      // Update existing session
       updateSessionMutation.mutate({
         id: editingSession.id,
         data: {
@@ -217,55 +234,60 @@ export default function Schedule() {
       return;
     }
 
+    const trainerName = `${user.first_name} ${user.last_name}`.trim() || user.full_name;
+    const isGroup = ridersToSchedule.length > 1;
+
     if (sessionForm.is_recurring) {
-      // Generate recurring sessions
-      const recurringGroupId = `recurring-${Date.now()}`;
       const sessions = [];
       const baseDate = new Date(sessionForm.session_date);
-      
+
       for (let week = 0; week < sessionForm.recurrence_weeks; week++) {
         const sessionDate = new Date(baseDate);
         sessionDate.setDate(sessionDate.getDate() + (week * 7));
-        
-        sessions.push({
-          trainer_email: user.email,
-          trainer_name: `${user.first_name} ${user.last_name}`.trim() || user.full_name,
-          rider_email: sessionForm.rider_email,
-          rider_name: sessionForm.rider_name,
-          horse_name: sessionForm.horse_name,
-          session_date: sessionDate.toISOString(),
-          duration: sessionForm.duration,
-          session_type: sessionForm.session_type,
-          notes: sessionForm.notes,
-          is_recurring: true,
-          recurring_group_id: recurringGroupId,
-          status: 'scheduled'
-        });
+        const weekGroupId = isGroup ? crypto.randomUUID() : undefined;
+
+        for (const rider of ridersToSchedule) {
+          sessions.push({
+            trainer_email: user.email,
+            trainer_name: trainerName,
+            rider_email: rider.email,
+            rider_name: rider.name,
+            horse_name: rider.horse_name,
+            session_date: sessionDate.toISOString(),
+            duration: sessionForm.duration,
+            session_type: sessionForm.session_type,
+            notes: sessionForm.notes,
+            is_recurring: true,
+            group_id: weekGroupId,
+            status: 'scheduled'
+          });
+        }
       }
 
-      // Create all sessions
       Promise.all(sessions.map(s => base44.entities.TrainingSession.create(s)))
         .then(() => {
           queryClient.invalidateQueries({ queryKey: ['training-sessions'] });
           setShowAddSession(false);
-          setSessionForm({
-            rider_email: '',
-            rider_name: '',
-            horse_name: '',
-            session_date: '',
-            duration: 60,
-            session_type: 'Lesson',
-            notes: '',
-            is_recurring: false,
-            recurrence_weeks: 4
-          });
+          resetForm();
         });
     } else {
-      createSessionMutation.mutate({
+      const groupId = isGroup ? crypto.randomUUID() : undefined;
+      const sessions = ridersToSchedule.map(rider => ({
         ...sessionForm,
         trainer_email: user.email,
-        trainer_name: `${user.first_name} ${user.last_name}`.trim() || user.full_name
-      });
+        trainer_name: trainerName,
+        rider_email: rider.email,
+        rider_name: rider.name,
+        horse_name: rider.horse_name,
+        group_id: groupId
+      }));
+
+      Promise.all(sessions.map(s => createSessionMutation.mutateAsync(s)))
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['training-sessions'] });
+          setShowAddSession(false);
+          resetForm();
+        });
     }
   };
 
@@ -775,56 +797,120 @@ export default function Schedule() {
                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                     <Label>{t.riderProfile.trainer} *</Label>
-                     <Select
-                       value={sessionForm.rider_email}
-                       onValueChange={async (value) => {
-                         const rider = riders.find(r => r.email === value);
-                         setSessionForm(prev => ({
-                           ...prev,
-                           rider_email: value,
-                           rider_name: rider?.name || '',
-                           horse_name: ''
-                         }));
-                         // Load rider's horses
-                         const horses = await base44.entities.Horse.filter({ owner_email: value });
-                         setRiderHorses(horses);
-                       }}
-                     >
-                       <SelectTrigger className="border-[#1B4332]/20">
-                         <SelectValue placeholder={t.riderProfile.selectTrainer} />
-                       </SelectTrigger>
-                       <SelectContent>
-                         {riders.map(rider => (
-                           <SelectItem key={rider.email} value={rider.email}>
-                             {rider.name}
-                           </SelectItem>
-                         ))}
-                       </SelectContent>
-                     </Select>
+                  {/* Multi-Rider Selection */}
+                  {!editingSession && (
+                    <div className="space-y-3">
+                      <Label>{t.schedule.addRider || 'Add Riders'} *</Label>
+                      <Select
+                        onValueChange={addRiderToGroup}
+                        value=""
+                      >
+                        <SelectTrigger className="border-[#1B4332]/20">
+                          <SelectValue placeholder={t.schedule.selectRider || 'Select a rider to add'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {riders.filter(r => !selectedRiders.some(sr => sr.email === r.email)).map(rider => (
+                            <SelectItem key={rider.email} value={rider.email}>
+                              {rider.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedRiders.length > 0 && (
+                        <div className="space-y-2">
+                          {selectedRiders.map((rider) => {
+                            const horses = allRiderHorses[rider.email] || [];
+                            return (
+                              <div key={rider.email} className="flex items-center gap-2 p-2 bg-indigo-50 rounded-lg border border-indigo-200">
+                                <Users className="w-4 h-4 text-indigo-600 shrink-0" />
+                                <span className="text-sm font-medium text-[#1B4332] shrink-0">{rider.name}</span>
+                                {horses.length > 0 && (
+                                  <Select
+                                    value={rider.horse_name}
+                                    onValueChange={(val) => updateRiderHorse(rider.email, val)}
+                                  >
+                                    <SelectTrigger className="h-7 text-xs border-indigo-200 w-32">
+                                      <SelectValue placeholder={t.riderProfile.selectHorse} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {horses.map(h => (
+                                        <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeRiderFromGroup(rider.email)}
+                                  className="h-6 w-6 p-0 ml-auto text-red-600 hover:bg-red-50"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                          {selectedRiders.length > 1 && (
+                            <p className="text-xs text-indigo-600">
+                              {t.schedule.groupSessionNote || `Group session: ${selectedRiders.length} riders will be scheduled together`}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                     <Label>{t.riderProfile.horse}</Label>
-                     <Select
-                       value={sessionForm.horse_name}
-                       onValueChange={(value) => setSessionForm(prev => ({ ...prev, horse_name: value }))}
-                       disabled={!sessionForm.rider_email}
-                     >
-                       <SelectTrigger className="border-[#1B4332]/20">
-                         <SelectValue placeholder={sessionForm.rider_email ? t.riderProfile.selectHorse : t.riderProfile.selectTrainer} />
-                       </SelectTrigger>
-                       <SelectContent>
-                         {riderHorses.map(horse => (
-                           <SelectItem key={horse.id} value={horse.name}>
-                             {horse.name}
-                           </SelectItem>
-                         ))}
-                       </SelectContent>
-                     </Select>
+                  )}
+                  {/* Single rider display when editing */}
+                  {editingSession && (
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                       <Label>{t.riderProfile.trainer} *</Label>
+                       <Select
+                         value={sessionForm.rider_email}
+                         onValueChange={async (value) => {
+                           const rider = riders.find(r => r.email === value);
+                           setSessionForm(prev => ({
+                             ...prev,
+                             rider_email: value,
+                             rider_name: rider?.name || '',
+                             horse_name: ''
+                           }));
+                           const horses = await base44.entities.Horse.filter({ owner_email: value });
+                           setRiderHorses(horses);
+                         }}
+                       >
+                         <SelectTrigger className="border-[#1B4332]/20">
+                           <SelectValue placeholder={t.riderProfile.selectTrainer} />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {riders.map(rider => (
+                             <SelectItem key={rider.email} value={rider.email}>
+                               {rider.name}
+                             </SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                      </div>
+                      <div className="space-y-2">
+                       <Label>{t.riderProfile.horse}</Label>
+                       <Select
+                         value={sessionForm.horse_name}
+                         onValueChange={(value) => setSessionForm(prev => ({ ...prev, horse_name: value }))}
+                         disabled={!sessionForm.rider_email}
+                       >
+                         <SelectTrigger className="border-[#1B4332]/20">
+                           <SelectValue placeholder={sessionForm.rider_email ? t.riderProfile.selectHorse : t.riderProfile.selectTrainer} />
+                         </SelectTrigger>
+                         <SelectContent>
+                           {riderHorses.map(horse => (
+                             <SelectItem key={horse.id} value={horse.name}>
+                               {horse.name}
+                             </SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>{t.riderProfile.dateTime} *</Label>
@@ -914,17 +1000,7 @@ export default function Schedule() {
                     onClick={() => {
                       setShowAddSession(false);
                       setEditingSession(null);
-                      setSessionForm({
-                        rider_email: '',
-                        rider_name: '',
-                        horse_name: '',
-                        session_date: '',
-                        duration: 60,
-                        session_type: 'Lesson',
-                        notes: '',
-                        is_recurring: false,
-                        recurrence_weeks: 4
-                      });
+                      resetForm();
                     }}
                     className="border-[#1B4332]/20 w-full sm:w-auto"
                   >
@@ -1131,76 +1207,179 @@ export default function Schedule() {
                             </div>
                           </div>
                         ))}
-                        {viewSessions.map((session) => (
-                          <div
-                            key={session.id}
-                            className="p-4 bg-[#1B4332]/5 rounded-lg border border-[#1B4332]/10"
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <div className="font-semibold text-[#1B4332] mb-1">
-                                  {format(new Date(session.session_date), 'EEE, MMM d - h:mm a')} ({session.duration} min)
-                                </div>
-                                <div className="text-sm text-[#1B4332]/80">
-                                  {session.rider_name || session.rider_email}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={async () => {
-                                    // Load rider's horses
-                                    const horses = await base44.entities.Horse.filter({ owner_email: session.rider_email });
-                                    setRiderHorses(horses);
-                                    setEditingSession(session);
-                                    setSessionForm({
-                                      rider_email: session.rider_email,
-                                      rider_name: session.rider_name,
-                                      horse_name: session.horse_name || '',
-                                      session_date: format(new Date(session.session_date), "yyyy-MM-dd'T'HH:mm"),
-                                      duration: session.duration,
-                                      session_type: session.session_type,
-                                      notes: session.notes || '',
-                                      is_recurring: false,
-                                      recurrence_weeks: 4
-                                    });
-                                    setShowAddSession(true);
-                                  }}
-                                  className="h-8 w-8 p-0 text-[#1B4332] hover:bg-[#1B4332]/10"
+                        {(() => {
+                          // Group sessions by group_id
+                          const grouped = {};
+                          const ungrouped = [];
+                          viewSessions.forEach(s => {
+                            if (s.group_id) {
+                              if (!grouped[s.group_id]) grouped[s.group_id] = [];
+                              grouped[s.group_id].push(s);
+                            } else {
+                              ungrouped.push(s);
+                            }
+                          });
+
+                          return (
+                            <>
+                              {/* Grouped sessions */}
+                              {Object.entries(grouped).map(([groupId, groupSessions]) => {
+                                const first = groupSessions[0];
+                                return (
+                                  <div
+                                    key={groupId}
+                                    className="p-4 bg-indigo-50 rounded-lg border-2 border-indigo-300"
+                                  >
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <Users className="w-4 h-4 text-indigo-600" />
+                                          <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                                            {t.schedule.groupSession || 'Group'} · {groupSessions.length} {t.schedule.ridersCount || 'riders'}
+                                          </span>
+                                        </div>
+                                        <div className="font-semibold text-[#1B4332] mb-1">
+                                          {format(new Date(first.session_date), 'EEE, MMM d - h:mm a')} ({first.duration} min)
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={async () => {
+                                            const horses = await base44.entities.Horse.filter({ owner_email: first.rider_email });
+                                            setRiderHorses(horses);
+                                            setEditingSession(first);
+                                            setSessionForm({
+                                              rider_email: first.rider_email,
+                                              rider_name: first.rider_name,
+                                              horse_name: first.horse_name || '',
+                                              session_date: format(new Date(first.session_date), "yyyy-MM-dd'T'HH:mm"),
+                                              duration: first.duration,
+                                              session_type: first.session_type,
+                                              notes: first.notes || '',
+                                              is_recurring: false,
+                                              recurrence_weeks: 4
+                                            });
+                                            setShowAddSession(true);
+                                          }}
+                                          className="h-8 w-8 p-0 text-indigo-600 hover:bg-indigo-100"
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            if (confirm(t.schedule.deleteGroupConfirm || `Delete all ${groupSessions.length} sessions in this group?`)) {
+                                              Promise.all(groupSessions.map(s => deleteSessionMutation.mutateAsync(s)));
+                                            }
+                                          }}
+                                          className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1 mb-2">
+                                      {groupSessions.map(s => (
+                                        <div key={s.id} className="flex items-center gap-2 text-sm text-[#1B4332]/80">
+                                          <User className="w-3 h-3 text-indigo-500" />
+                                          <span>{s.rider_name || s.rider_email}</span>
+                                          {s.horse_name && <span className="text-[#1B4332]/60">· 🐴 {s.horse_name}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-xs text-[#8B5A2B] bg-[#8B5A2B]/10 px-2 py-1 rounded-full inline-block">
+                                        {first.session_type}
+                                      </div>
+                                      {first.is_recurring && (
+                                        <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full inline-block">
+                                          ↻ {t.events.scheduleRecurring}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {first.notes && (
+                                      <p className="text-sm text-[#1B4332]/60 mt-3">{first.notes}</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+
+                              {/* Ungrouped sessions */}
+                              {ungrouped.map((session) => (
+                                <div
+                                  key={session.id}
+                                  className="p-4 bg-[#1B4332]/5 rounded-lg border border-[#1B4332]/10"
                                 >
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => deleteSessionMutation.mutate(session)}
-                                  className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            {session.horse_name && (
-                              <div className="text-sm text-[#1B4332]/60 mb-2">
-                                🐴 {session.horse_name}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <div className="text-xs text-[#8B5A2B] bg-[#8B5A2B]/10 px-2 py-1 rounded-full inline-block">
-                                {session.session_type}
-                              </div>
-                              {session.is_recurring && (
-                                <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full inline-block">
-                                  ↻ {t.events.scheduleRecurring}
+                                  <div className="flex items-start justify-between mb-2">
+                                    <div>
+                                      <div className="font-semibold text-[#1B4332] mb-1">
+                                        {format(new Date(session.session_date), 'EEE, MMM d - h:mm a')} ({session.duration} min)
+                                      </div>
+                                      <div className="text-sm text-[#1B4332]/80">
+                                        {session.rider_name || session.rider_email}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={async () => {
+                                          const horses = await base44.entities.Horse.filter({ owner_email: session.rider_email });
+                                          setRiderHorses(horses);
+                                          setEditingSession(session);
+                                          setSessionForm({
+                                            rider_email: session.rider_email,
+                                            rider_name: session.rider_name,
+                                            horse_name: session.horse_name || '',
+                                            session_date: format(new Date(session.session_date), "yyyy-MM-dd'T'HH:mm"),
+                                            duration: session.duration,
+                                            session_type: session.session_type,
+                                            notes: session.notes || '',
+                                            is_recurring: false,
+                                            recurrence_weeks: 4
+                                          });
+                                          setShowAddSession(true);
+                                        }}
+                                        className="h-8 w-8 p-0 text-[#1B4332] hover:bg-[#1B4332]/10"
+                                      >
+                                        <Edit2 className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => deleteSessionMutation.mutate(session)}
+                                        className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  {session.horse_name && (
+                                    <div className="text-sm text-[#1B4332]/60 mb-2">
+                                      🐴 {session.horse_name}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-xs text-[#8B5A2B] bg-[#8B5A2B]/10 px-2 py-1 rounded-full inline-block">
+                                      {session.session_type}
+                                    </div>
+                                    {session.is_recurring && (
+                                      <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full inline-block">
+                                        ↻ {t.events.scheduleRecurring}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {session.notes && (
+                                    <p className="text-sm text-[#1B4332]/60 mt-3">{session.notes}</p>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                            {session.notes && (
-                              <p className="text-sm text-[#1B4332]/60 mt-3">{session.notes}</p>
-                            )}
-                          </div>
-                        ))}
+                              ))}
+                            </>
+                          );
+                        })()}
                       </>
                     );
                   })()}

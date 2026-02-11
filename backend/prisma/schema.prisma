@@ -206,13 +206,15 @@ model TrainingSession {
   riderVerified     Boolean  @default(false) @map("rider_verified")
   riderVerifiedDate DateTime? @map("rider_verified_date")
   status            SessionStatus @default(SCHEDULED)
-  
+  groupId           String?  @map("group_id")
+
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-  
+
   trainer           User     @relation("TrainerSessions", fields: [trainerEmail], references: [email])
   rider             User     @relation("RiderSessions", fields: [riderEmail], references: [email])
 
+  @@index([groupId])
   @@map("training_sessions")
 }
 

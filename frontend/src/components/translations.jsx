@@ -262,7 +262,13 @@ export const translations = {
       status: "סטטוס:",
       scheduled: "מתוכנן",
       completed: "הושלם",
-      cancelled: "בוטל"
+      cancelled: "בוטל",
+      addRider: "הוסף רוכבים",
+      selectRider: "בחר רוכב להוספה",
+      groupSession: "קבוצה",
+      ridersCount: "רוכבים",
+      groupSessionNote: "מפגש קבוצתי: הרוכבים יתוזמנו יחד",
+      deleteGroupConfirm: "למחוק את כל המפגשים בקבוצה?"
     },
     // Billing Page
     billing: {
@@ -878,7 +884,13 @@ export const translations = {
       status: "Status:",
       scheduled: "Scheduled",
       completed: "Completed",
-      cancelled: "Cancelled"
+      cancelled: "Cancelled",
+      addRider: "Add Riders",
+      selectRider: "Select a rider to add",
+      groupSession: "Group",
+      ridersCount: "riders",
+      groupSessionNote: "Group session: riders will be scheduled together",
+      deleteGroupConfirm: "Delete all sessions in this group?"
     },
     // Billing Page
     billing: {
